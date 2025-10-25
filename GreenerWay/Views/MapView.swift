@@ -1,8 +1,10 @@
 import SwiftUI
 import MapKit
+import Combine
 
 struct MapView: UIViewRepresentable {
     let viewModel: RouteViewModel
+    private let location = LocationDelegate.shared
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView()
@@ -11,19 +13,23 @@ struct MapView: UIViewRepresentable {
         map.isRotateEnabled = false
         map.pointOfInterestFilter = .includingAll
 
-        // Başlangıçta kullanıcıyı takip et
-        map.setUserTrackingMode(.follow, animated: false)
+        // Konum izinlerini iste ve yüksek doğrulukta başlat
+        location.requestWhenInUse()
+        location.start()
 
+        // Başlangıçta kullanıcıyı yönle takip et
+        map.setUserTrackingMode(.followWithHeading, animated: false)
+
+        // LocationDelegate'den gelen konumu dinle
+        context.coordinator.bindLocationUpdates(to: map, source: location)
         return map
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {
-        // Kullanıcı konumu dışındaki annotation/overlay'leri temizle
         let toRemoveAnno = map.annotations.filter { !($0 is MKUserLocation) }
         if !toRemoveAnno.isEmpty { map.removeAnnotations(toRemoveAnno) }
         if !map.overlays.isEmpty { map.removeOverlays(map.overlays) }
 
-        // Başlangıç & varış pinleri (varsa)
         if let from = viewModel.originCoordinate {
             let a = MKPointAnnotation()
             a.coordinate = from
@@ -37,49 +43,12 @@ struct MapView: UIViewRepresentable {
             map.addAnnotation(b)
         }
 
-        // Rota çizgisi (varsa rotaya sığdır)
         if let poly = viewModel.routePolyline {
             map.addOverlay(poly)
             let edge = UIEdgeInsets(top: 100, left: 80, bottom: 120, right: 80)
             map.setVisibleMapRect(poly.boundingMapRect, edgePadding: edge, animated: true)
-
-            // Rotaya geçtiysek bir daha "ilk zoom" yapmayalım
             context.coordinator.didZoomToUserOnce = true
             return
-        }
-
-        // Rota yoksa ve henüz "ilk zoom" yapılmadıysa kullanıcıya yakınlaş
-        if context.coordinator.didZoomToUserOnce == false {
-            if let loc = map.userLocation.location {
-                let c = loc.coordinate
-                if CLLocationCoordinate2DIsValid(c) && !(abs(c.latitude) < 0.0001 && abs(c.longitude) < 0.0001) {
-                    let region = MKCoordinateRegion(
-                        center: c,
-                        span: MKCoordinateSpan(latitudeDelta: 0.0015, longitudeDelta: 0.0015)
-                    )
-                    map.setRegion(region, animated: true)
-                    map.setUserTrackingMode(.follow, animated: true)
-                    context.coordinator.didZoomToUserOnce = true
-                    return
-                }
-            }
-
-            // userLocation henüz düşmediyse, originCoordinate varsa ona yakınlaş
-            if let from = viewModel.originCoordinate {
-                let region = MKCoordinateRegion(
-                    center: from,
-                    span: MKCoordinateSpan(latitudeDelta: 0.0015, longitudeDelta: 0.0015)
-                )
-                map.setRegion(region, animated: true)
-                map.setUserTrackingMode(.follow, animated: true)
-                context.coordinator.didZoomToUserOnce = true
-            }
-        }
-
-        // ÖNEMLİ: Rota yokken kullanıcı haritayı sürüklese bile tekrar takip moduna dön.
-        // Bu sayede harita mevcut konuma yeniden yakınlar.
-        if viewModel.routePolyline == nil, map.userTrackingMode != .follow {
-            map.setUserTrackingMode(.follow, animated: true)
         }
     }
 
@@ -88,31 +57,74 @@ struct MapView: UIViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate {
         let parent: MapView
         var didZoomToUserOnce = false
+        private var isRecentering = false
+        private var cancellables = Set<AnyCancellable>()
 
         init(_ parent: MapView) {
             self.parent = parent
         }
 
-        // Kullanıcının mavi nokta konumu güncellendiğinde, ilk defa görüyorsak süper yakın zoom yap
-        func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
-            guard didZoomToUserOnce == false, let loc = userLocation.location else { return }
-            let c = loc.coordinate
-            guard CLLocationCoordinate2DIsValid(c),
-                  !(abs(c.latitude) < 0.0001 && abs(c.longitude) < 0.0001) else { return }
+        func bindLocationUpdates(to mapView: MKMapView, source: LocationDelegate) {
+            source.$lastLocation
+                .compactMap { $0 }
+                .receive(on: RunLoop.main)
+                .sink { [weak self, weak mapView] loc in
+                    guard let self = self, let mapView = mapView else { return }
+                    let c = loc.coordinate
+                    let acc = loc.horizontalAccuracy
+                    guard CLLocationCoordinate2DIsValid(c),
+                          !(abs(c.latitude) < 0.0001 && abs(c.longitude) < 0.0001),
+                          acc > 0, acc <= 35 else { return } // sokak seviyesi
 
+                    if self.didZoomToUserOnce == false, self.parent.viewModel.routePolyline == nil {
+                        // Sokak seviyesine yakın zoom
+                        let region = MKCoordinateRegion(
+                            center: c,
+                            span: MKCoordinateSpan(latitudeDelta: 0.0008, longitudeDelta: 0.0008)
+                        )
+                        mapView.setRegion(region, animated: true)
+                        mapView.setUserTrackingMode(.followWithHeading, animated: true)
+                        self.didZoomToUserOnce = true
+                    } else {
+                        if mapView.userTrackingMode == .follow || mapView.userTrackingMode == .followWithHeading {
+                            mapView.setCenter(c, animated: true)
+                        }
+                    }
+                }
+                .store(in: &cancellables)
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            if isRecentering { return }
+            if parent.viewModel.routePolyline != nil { return }
+
+            guard let loc = LocationDelegate.shared.lastLocation else { return }
+            let coord = loc.coordinate
+            let acc = loc.horizontalAccuracy
+            guard CLLocationCoordinate2DIsValid(coord),
+                  !(abs(coord.latitude) < 0.0001 && abs(coord.longitude) < 0.0001),
+                  acc > 0, acc <= 35 else { return }
+
+            let userPoint = MKMapPoint(coord)
+            let isVisible = mapView.visibleMapRect.contains(userPoint)
+            guard isVisible == false else { return }
+
+            isRecentering = true
             DispatchQueue.main.async {
                 let region = MKCoordinateRegion(
-                    center: c,
-                    span: MKCoordinateSpan(latitudeDelta: 0.0015, longitudeDelta: 0.0015)
+                    center: coord,
+                    span: MKCoordinateSpan(latitudeDelta: 0.0008, longitudeDelta: 0.0008)
                 )
-                mapView.setRegion(region, animated: true)
-                if mapView.userTrackingMode != .follow {
-                    mapView.setUserTrackingMode(.follow, animated: true)
+                if mapView.userTrackingMode != .followWithHeading {
+                    mapView.setUserTrackingMode(.followWithHeading, animated: true)
                 }
-                self.didZoomToUserOnce = true
+                mapView.setRegion(region, animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    self.isRecentering = false
+                }
             }
         }
-        
+
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let line = overlay as? MKPolyline {
                 let r = MKPolylineRenderer(overlay: line)
