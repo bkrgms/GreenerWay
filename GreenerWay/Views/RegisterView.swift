@@ -13,42 +13,103 @@ struct RegisterView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                Text("Kayıt Ol")
-                    .font(.largeTitle).bold()
-                    .foregroundColor(.green)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 24) {
+                // Başlık
+                VStack(spacing: 8) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 40))
+                        .foregroundColor(.primary.opacity(0.7))
+                    Text("Kayıt Ol")
+                        .font(.title)
+                        .fontWeight(.bold)
+                }
+                .padding(.top, 20)
 
-                TextField("E-posta", text: $email)
-                    .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
+                // Form
+                VStack(spacing: 16) {
+                    // Email
+                    HStack(spacing: 12) {
+                        Image(systemName: "envelope.fill")
+                            .foregroundColor(.secondary)
+                            .frame(width: 24)
+                        TextField("E-posta", text: $email)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                    }
                     .padding()
                     .background(Color(.systemGray6))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
 
-                SecureField("Şifre", text: $password)
+                    // Şifre
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.fill")
+                            .foregroundColor(.secondary)
+                            .frame(width: 24)
+                        SecureField("Şifre", text: $password)
+                    }
                     .padding()
                     .background(Color(.systemGray6))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
 
-                TextField("Yaş", text: $age)
-                    .keyboardType(.numberPad)
+                    // Yaş
+                    HStack(spacing: 12) {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.secondary)
+                            .frame(width: 24)
+                        TextField("Yaş", text: $age)
+                            .keyboardType(.numberPad)
+                    }
                     .padding()
                     .background(Color(.systemGray6))
-                    .cornerRadius(10)
-
-                VStack(alignment: .leading) {
-                    Text("Karbon Hassasiyeti: \(Int(carbonSensitivity * 100))%")
-                    Slider(value: $carbonSensitivity, in: 0...1)
+                    .cornerRadius(12)
                 }
 
-                Picker("Sağlık Durumu", selection: $healthStatus) {
-                    Text("Normal").tag("Normal")
-                    Text("Kötü").tag("Kötü")
+                // Karbon Hassasiyeti
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Karbon Hassasiyeti")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    HStack {
+                        Text("Düşük")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Slider(value: $carbonSensitivity, in: 0...1)
+                        Text("Yüksek")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("Seviye: \(Int(carbonSensitivity * 100))%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                .pickerStyle(.segmented)
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
 
-                Toggle("Çocuk ile seyahat ediyorum", isOn: $travellingWithChild)
+                // Sağlık Durumu
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Sağlık Durumu")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Picker("Sağlık", selection: $healthStatus) {
+                        Text("Normal").tag("Normal")
+                        Text("Hassas").tag("Hassas")
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                // Çocuklu Seyahat
+                Toggle(isOn: $travellingWithChild) {
+                    HStack {
+                        Image(systemName: "figure.and.child.holdinghands")
+                            .foregroundColor(.secondary)
+                        Text("Çocuk ile seyahat ediyorum")
+                    }
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
 
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
@@ -56,32 +117,38 @@ struct RegisterView: View {
                         .font(.footnote)
                 }
 
-                Button("Kayıt Ol") {
+                // Kayıt Butonu
+                Button {
                     Task {
                         do {
                             let user = try await authVM.signUp(email: email, password: password)
-
                             let profile = UserProfile(
                                 age: Int(age) ?? 18,
                                 carbonSensitivity: carbonSensitivity,
                                 healthStatus: healthStatus,
                                 travellingWithChild: travellingWithChild
                             )
-
                             try await FirestoreManager.shared.saveUserProfile(uid: user.uid, profile: profile)
                             dismiss()
                         } catch {
                             errorMessage = error.localizedDescription
                         }
                     }
+                } label: {
+                    Text("Kayıt Ol")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.primary)
+                        .foregroundColor(Color(.systemBackground))
+                        .cornerRadius(12)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.green)
-                .foregroundColor(.white)
-                .cornerRadius(10)
+                
+                Spacer().frame(height: 20)
             }
             .padding()
         }
+        .navigationTitle("Kayıt")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -1,26 +1,25 @@
 import SwiftUI
 import FirebaseCore
-import FirebaseAuth
 
 @main
-struct KarbonYolApp: App {
-    @StateObject var authVM = AuthViewModel()
-    
+struct GreenerWayApp: App {
+    @StateObject private var authViewModel = AuthViewModel()
+
     init() {
         FirebaseApp.configure()
-        // Hava durumu servisini uygulama başında ayarla (RouteViewModel bunu kullanıyor)
-        _OpenWeatherServiceSingleton.shared = OpenWeatherService()
+        print("Uygulama Başlatıldı.")
     }
-    
+
     var body: some Scene {
         WindowGroup {
-            if authVM.user != nil {
-                RouteSearchView()
-                    .environmentObject(authVM)   // ✅ burası önemli
-            } else {
-                LoginView()
-                    .environmentObject(authVM)   // ✅ burası önemli
+            Group {
+                if authViewModel.isLoggedIn {
+                    RouteSearchView()
+                } else {
+                    LoginView()
+                }
             }
+            .environmentObject(authViewModel)
         }
     }
 }

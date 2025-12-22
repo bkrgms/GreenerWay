@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyDpyePqQSKLqKeS2-vFYLl7bB-aNM08TYU</string>
+	<string>AIzaSyBtCSn4q58W8KzDUa8Tt0wN3T-4840mIZk</string>
 	<key>GCM_SENDER_ID</key>
-	<string>758227315809</string>
+	<string>945040250290</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.bkrgms.KarbonYol</string>
+	<string>com.bkrgms.GreenerWay</string>
 	<key>PROJECT_ID</key>
-	<string>karbonyol</string>
+	<string>greenerway-9236c</string>
 	<key>STORAGE_BUCKET</key>
-	<string>karbonyol.firebasestorage.app</string>
+	<string>greenerway-9236c.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:758227315809:ios:283da89bb25073a1eece20</string>
+	<string>1:945040250290:ios:6ae6d695680788f7cc00ab</string>
 </dict>
 </plist>

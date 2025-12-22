@@ -37,22 +37,16 @@ final class RouteLocationProxy: NSObject, CLLocationManagerDelegate {
             }
             manager.startUpdatingLocation()
         }
-        // UI güncellemeleri ana aktörde
-        Task { @MainActor in
-            // Gerekirse buraya UI-yanıtsal durum aktarımı eklenebilir
-            _ = owner // no-op
-        }
+        Task { @MainActor in _ = owner }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last, let owner = owner else { return }
 
         Task { @MainActor in
-            // İlk girişte “Mevcut Konum” yazdır (UI boşsa)
             if owner.originText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 owner.originText = "Mevcut Konum"
             }
-
             owner.originCoordinate = loc.coordinate
 
             let acc = loc.horizontalAccuracy
@@ -85,9 +79,7 @@ final class RouteViewModel: NSObject, ObservableObject {
     // MARK: Inputs
     @Published var originText: String = ""
     @Published var destinationText: String = "" {
-        didSet {
-            destinationCoordinate = nil
-        }
+        didSet { destinationCoordinate = nil }
     }
     @Published var selectedMode: TransportMode = .car
 
@@ -103,7 +95,7 @@ final class RouteViewModel: NSObject, ObservableObject {
 
     // MARK: Transit (otobüs) kişi başı emisyon için girdiler
     @Published var busFuelType: BusFuelType?
-    @Published var busConsumptionPer100: Double?   // Dizel: L/100km, CNG: kg/100km, Elektrik: kWh/100km
+    @Published var busConsumptionPer100: Double?
     @Published var busRouteKind: BusRouteKind?
 
     var shouldPersistJourneyForNextBuild: Bool = false
@@ -114,7 +106,6 @@ final class RouteViewModel: NSObject, ObservableObject {
     private let db = Firestore.firestore()
     private lazy var proxy = RouteLocationProxy(owner: self)
 
-    // Adresin daha detaylı gelmesi için doğruluk takibi
     fileprivate var bestOriginAccuracy: CLLocationAccuracy = .greatestFiniteMagnitude
     fileprivate var lastReverseGeocodeAt: Date?
 
@@ -147,7 +138,8 @@ final class RouteViewModel: NSObject, ObservableObject {
         return hasOrigin && hasDest
     }
 
-    // TAM adres yazdırma – CNPostalAddress + CLPlacemark harman
+    // Deprecation olarak işaretledik: bugün kullanılabilir, iOS 26’da sadece uyarı verir.
+    @available(iOS, deprecated: 26.0, message: "Use MapKit geocoding APIs (MKGeocodingRequest/MKReverseGeocodingRequest).")
     fileprivate func prefillOriginAddress(from location: CLLocation) async {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location, preferredLocale: Locale.current)
@@ -157,18 +149,14 @@ final class RouteViewModel: NSObject, ObservableObject {
             }
 
             if let postal = p.postalAddress {
-                // CNPostalAddress’ta thoroughfare/subThoroughfare yok; street içinde birlikte gelir.
-                // Örn: "İnönü Cd. 45"
                 var parts: [String] = []
                 if !postal.street.isEmpty { parts.append(postal.street) }
                 if let subLocality = p.subLocality, !subLocality.isEmpty { parts.append(subLocality) }
                 if !postal.city.isEmpty { parts.append(postal.city) }
                 if !postal.postalCode.isEmpty { parts.append(postal.postalCode) }
                 if !postal.country.isEmpty { parts.append(postal.country) }
-
                 originText = parts.isEmpty ? "Mevcut Konum" : parts.joined(separator: ", ")
             } else {
-                // postalAddress yoksa CLPlacemark alanlarını kullan
                 var parts: [String] = []
                 if let street = p.thoroughfare, !street.isEmpty { parts.append(street) }
                 if let number = p.subThoroughfare, !number.isEmpty { parts.append(number) }
@@ -184,13 +172,18 @@ final class RouteViewModel: NSObject, ObservableObject {
         }
     }
 
+    @available(iOS, deprecated: 26.0, message: "Use MKGeocodingRequest when adopting iOS 26 SDK.")
     private func geocodeAddress(_ text: String) async throws -> CLLocationCoordinate2D {
-        // Not: iOS 18 SDK’da CLGeocoder depreke uyarısı verir. İkinci aşamada MKGeocodingRequest’e geçebiliriz.
         let list = try await geocoder.geocodeAddressString(text)
         guard let c = list.first?.location?.coordinate else {
             throw NSError(domain: "Geocode", code: -1, userInfo: [NSLocalizedDescriptionKey: "Adres bulunamadı"])
         }
         return c
+    }
+
+    @available(iOS, deprecated: 26.0, message: "Use MKMapItem(location:address:) when adopting iOS 26 SDK.")
+    private func mapItem(for coordinate: CLLocationCoordinate2D) -> MKMapItem {
+        return MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
     }
 
     // MARK: Route (Apple Maps)
@@ -226,9 +219,9 @@ final class RouteViewModel: NSObject, ObservableObject {
             }
 
             let req = MKDirections.Request()
-            // iOS 18 SDK’da MKPlacemark initializer’ı depreke; 2. aşamada MKMapItem(location:address:)’e geçeceğiz.
-            req.source = MKMapItem(placemark: MKPlacemark(coordinate: from))
-            req.destination = MKMapItem(placemark: MKPlacemark(coordinate: to))
+            req.source = mapItem(for: from)
+            req.destination = mapItem(for: to)
+
             switch selectedMode {
             case .car:     req.transportType = .automobile
             case .walking: req.transportType = .walking
@@ -256,14 +249,7 @@ final class RouteViewModel: NSObject, ObservableObject {
 
     // MARK: Emission
     func emissionKg() -> Double {
-        let km = distanceMeters / 1000
-        let factor: Double
-        switch selectedMode {
-        case .walking: factor = 0.0
-        case .car:     factor = 0.192
-        case .transit: factor = 0.105
-        }
-        return km * factor
+        return EmissionCalculator().kgCO2(distanceMeters: distanceMeters, mode: selectedMode)
     }
 
     // MARK: Transit kişi başı emisyon hesabı
@@ -321,20 +307,62 @@ final class RouteViewModel: NSObject, ObservableObject {
 
     // MARK: Firestore
     private func saveJourney(aiApplied: Bool = false) async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        let doc: [String: Any] = [
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ Yolculuk kaydedilemedi: Kullanıcı oturum açmamış")
+            return
+        }
+        guard distanceMeters > 0, expectedTime > 0 else {
+            print("💾 Yolculuk kaydedilmedi: Mesafe veya süre sıfır.")
+            return
+        }
+
+        let emission = emissionKg()
+        let mode = selectedMode.rawValue
+        
+        print("📝 Yolculuk kaydediliyor...")
+        print("   📍 Mod: \(mode)")
+        print("   📏 Mesafe: \(String(format: "%.2f", distanceMeters / 1000)) km")
+        print("   🌿 Emisyon: \(String(format: "%.2f", emission)) kg CO₂")
+        print("   🤖 Akıllı Öneri: \(aiApplied)")
+
+        let journeyData: [String: Any] = [
             "userId": uid,
             "date": Timestamp(date: Date()),
             "distanceKm": distanceMeters / 1000,
-            "emissionKg": emissionKg(),
+            "emissionKg": emission,
             "durationMin": expectedTime / 60,
-            "mode": selectedMode.rawValue,
+            "mode": mode,
             "aiApplied": aiApplied
         ]
+
         do {
-            try await db.collection("journeys").addDocument(data: doc)
+            let docRef = try await db.collection("journeys").addDocument(data: journeyData)
+            print("✅ Yolculuk kaydedildi! ID: \(docRef.documentID)")
+
+            // Rozet kontrolleri
+            let savedJourneyObject = Journey(
+                userId: uid,
+                date: Date(),
+                distanceKm: distanceMeters / 1000,
+                emissionKg: emission,
+                mode: mode,
+                durationMin: expectedTime / 60,
+                aiApplied: aiApplied
+            )
+
+            // 1) İlk Yeşil Yolculuk
+            try? await FirestoreManager.shared.checkAndAwardFirstGreenJourneyBadge(
+                userId: uid,
+                currentJourney: savedJourneyObject
+            )
+
+            // 2) İlk 10 kg Tasarruf
+            try? await FirestoreManager.shared.checkAndAwardTenKgSavingsBadge(
+                userId: uid
+            )
+
         } catch {
-            print("❌ saveJourney error: \(error)")
+            print("❌ saveJourney Firestore hatası: \(error)")
         }
     }
 
@@ -342,12 +370,10 @@ final class RouteViewModel: NSObject, ObservableObject {
         await saveJourney(aiApplied: false)
     }
 
-    // Yeni: Seçilen yolculuğu (AI veya kullanıcı tercihi) açıkça kaydet
     func persistSelectedJourney(aiApplied: Bool) async {
         await saveJourney(aiApplied: aiApplied)
     }
 
-    // MARK: Weather (opsiyonel)
     private func fetchWeatherIfAvailable(at coordinate: CLLocationCoordinate2D) async {
         if let svc = _OpenWeatherServiceSingleton.shared {
             do {
@@ -360,7 +386,6 @@ final class RouteViewModel: NSObject, ObservableObject {
     }
 }
 
-// Opsiyonel: uygulama başında set edebilirsin
 final class _OpenWeatherServiceSingleton {
     static var shared: WeatherProviding?
 }

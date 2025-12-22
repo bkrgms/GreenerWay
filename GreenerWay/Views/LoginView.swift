@@ -1,3 +1,4 @@
+
 import SwiftUI
 
 struct LoginView: View {
@@ -7,62 +8,129 @@ struct LoginView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                Spacer()
-
-                Text("GreenerWay")
-                    .font(.largeTitle).bold()
-                    .foregroundColor(.green)
-
-                VStack(spacing: 16) {
-                    TextField("E-posta", text: $email)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-
-                    SecureField("Şifre", text: $password)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
+        Group {
+            if authVM.isLoggedIn {
+                VStack(spacing: 20) {
+                    Spacer()
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.primary.opacity(0.3))
+                    Text("Zaten giriş yapıldı")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Farklı bir hesapla giriş yapmak için çıkış yapın.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    Button {
+                        Task { try? await authVM.signOut() }
+                    } label: {
+                        Text("Çıkış Yap")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color(.systemGray5))
+                            .foregroundColor(.primary)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 40)
+                    Spacer()
                 }
-                .padding(.horizontal)
+            } else {
+                NavigationView {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 32) {
+                            Spacer().frame(height: 60)
+                            
+                            // Logo
+                            VStack(spacing: 8) {
+                                Image(systemName: "leaf.fill")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.primary)
+                                Text("GreenerWay")
+                                    .font(.largeTitle)
+                                    .fontWeight(.bold)
+                            }
+                            
+                            // Form
+                            VStack(spacing: 16) {
+                                // Email
+                                HStack(spacing: 12) {
+                                    Image(systemName: "envelope.fill")
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 24)
+                                    TextField("E-posta", text: $email)
+                                        .keyboardType(.emailAddress)
+                                        .autocapitalization(.none)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
 
-                if let errorMessage = errorMessage {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .font(.footnote)
-                }
+                                // Şifre
+                                HStack(spacing: 12) {
+                                    Image(systemName: "lock.fill")
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 24)
+                                    SecureField("Şifre", text: $password)
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
 
-                Button(action: {
-                    Task {
-                        do {
-                            _ = try await authVM.signIn(email: email, password: password)
-                        } catch {
-                            errorMessage = error.localizedDescription
+                            if let errorMessage = errorMessage {
+                                Text(errorMessage)
+                                    .foregroundColor(.red)
+                                    .font(.footnote)
+                                    .padding(.horizontal)
+                            }
+
+                            // Giriş Butonu
+                            Button {
+                                Task {
+                                    do {
+                                        _ = try await authVM.signIn(email: email, password: password)
+                                    } catch {
+                                        errorMessage = error.localizedDescription
+                                    }
+                                }
+                            } label: {
+                                Text("Giriş Yap")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.primary)
+                                    .foregroundColor(Color(.systemBackground))
+                                    .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+
+                            // Linkler
+                            VStack(spacing: 12) {
+                                NavigationLink(destination: ResetPasswordView()) {
+                                    Text("Şifremi Unuttum")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                NavigationLink(destination: RegisterView()) {
+                                    Text("Hesabın yok mu? **Kayıt Ol**")
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            
+                            Spacer()
                         }
                     }
-                }) {
-                    Text("Giriş Yap")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                    .navigationBarHidden(true)
                 }
-                .padding(.horizontal)
-
-                NavigationLink("Şifremi Unuttum", destination: ResetPasswordView())
-                    .foregroundColor(.blue)
-
-                NavigationLink("Hesabın yok mu? Kayıt Ol", destination: RegisterView())
-                    .foregroundColor(.blue)
-
-                Spacer()
             }
-            .padding()
         }
+        .onAppear { errorMessage = nil }
     }
 }
+

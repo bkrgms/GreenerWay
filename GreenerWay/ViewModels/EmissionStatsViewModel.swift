@@ -83,29 +83,56 @@ final class EmissionStatsViewModel: ObservableObject {
     }
 
     // MARK: Firestore fetch
-    private func fetchJourneysQuery() -> Query? {
-        guard let uid = Auth.auth().currentUser?.uid else { return nil }
-        return db.collection("journeys")
-            .whereField("userId", isEqualTo: uid)
-            .order(by: "date", descending: false)
-    }
-
-    private func parseDoc(_ data: [String: Any]) -> JourneyRecord? {
-        let ts = (data["date"] as? Timestamp)?.dateValue() ?? (data["date"] as? Date) ?? Date()
-        let mode = (data["mode"] as? String) ?? "car"
-        let distanceKm = (data["distanceKm"] as? Double) ?? 0
-        let emissionKg = (data["emissionKg"] as? Double) ?? 0
-        let durationMin = data["durationMin"] as? Double
-        return JourneyRecord(date: ts, mode: mode, distanceKm: distanceKm, emissionKg: emissionKg, durationMin: durationMin)
-    }
-
     private func fetchJourneys() async {
-        guard let q = fetchJourneysQuery() else { return }
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ EmissionStats: Kullanıcı oturum açmamış")
+            records = []
+            return
+        }
+        
+        print("🔄 EmissionStats: Firebase'den yolculuklar çekiliyor... (uid: \(uid))")
+        
         do {
-            let snap = try await q.getDocuments()
-            records = snap.documents.compactMap { parseDoc($0.data()) }
+            // Index hatası için geçici çözüm: order(by:) kullanmadan çekip uygulama tarafında sırala
+            let snapshot = try await db.collection("journeys")
+                .whereField("userId", isEqualTo: uid)
+                .getDocuments()
+            
+            print("✅ EmissionStats: \(snapshot.documents.count) doküman bulundu")
+            
+            // Parse ve tarihe göre sırala
+            var tempRecords: [JourneyRecord] = []
+            for doc in snapshot.documents {
+                let data = doc.data()
+                let ts = (data["date"] as? Timestamp)?.dateValue() ?? (data["date"] as? Date) ?? Date()
+                let mode = (data["mode"] as? String) ?? "car"
+                let distanceKm = (data["distanceKm"] as? Double) ?? 0
+                let emissionKg = (data["emissionKg"] as? Double) ?? 0
+                let durationMin = data["durationMin"] as? Double
+                
+                let record = JourneyRecord(
+                    date: ts,
+                    mode: mode,
+                    distanceKm: distanceKm,
+                    emissionKg: emissionKg,
+                    durationMin: durationMin
+                )
+                tempRecords.append(record)
+            }
+            
+            // Tarihe göre sırala (eskiden yeniye)
+            records = tempRecords.sorted { $0.date < $1.date }
+            
+            print("✅ EmissionStats: \(records.count) yolculuk işlendi")
+            
+            // Debug: İlk birkaç kaydı yazdır
+            if !records.isEmpty {
+                print("📊 İlk kayıt: Mod=\(records[0].mode), Emisyon=\(String(format: "%.2f", records[0].emissionKg))kg, Tarih=\(records[0].date)")
+            } else {
+                print("⚠️ EmissionStats: Kayıt bulunamadı")
+            }
         } catch {
-            print("❌ fetchJourneys error: \(error)")
+            print("❌ fetchJourneys error: \(error.localizedDescription)")
             records = []
         }
     }

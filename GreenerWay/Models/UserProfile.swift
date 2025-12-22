@@ -14,13 +14,17 @@ struct UserProfile: Codable, Identifiable {
     var notifications: Bool? = true
     var carbonUnit: String? = "kg"
     
+    // Yeni: Kullanıcının kazandığı rozet kimlikleri
+    var earnedBadgeIDs: [String]?
+    
     // Firestore için default initializer
     init(age: Int,
          carbonSensitivity: Double,
          healthStatus: String,
          travellingWithChild: Bool,
          notifications: Bool? = true,
-         carbonUnit: String? = "kg") {
+         carbonUnit: String? = "kg",
+         earnedBadgeIDs: [String]? = nil) {
         
         self.age = age
         self.carbonSensitivity = carbonSensitivity
@@ -28,5 +32,6 @@ struct UserProfile: Codable, Identifiable {
         self.travellingWithChild = travellingWithChild
         self.notifications = notifications
         self.carbonUnit = carbonUnit
+        self.earnedBadgeIDs = earnedBadgeIDs
     }
 }

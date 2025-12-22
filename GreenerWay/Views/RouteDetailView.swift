@@ -1,44 +1,42 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 struct RouteDetailView: View {
     @ObservedObject var viewModel: RouteViewModel
-    @State private var pushChart = false
+    @State private var showEmissionChart = false
+    @StateObject private var emissionStatsVM = EmissionStatsViewModel()
+    @StateObject private var badgeVM = BadgeViewModel()
+    @StateObject private var trafficService = TrafficService.shared
 
     // User profile and AI recommendation
     @State private var userProfile: UserProfile?
     @State private var recommendation: AIRecommendation?
+    @State private var trafficInfo: TrafficInfo?
 
     // Transit input field (visual only)
     @State private var busConsumptionField: String = ""
     // Snapshot of user preferred mode coming from search view
     @State private var userPreferredMode: TransportMode?
+    
+    // Validation
+    @State private var showTransitWarning = false
 
     var body: some View {
-        ZStack {
-            // Gizli NavigationLink: NavigationView ile uyumlu
-            NavigationLink(
-                destination: EmissionChartView(viewModel: makeStatsVM()),
-                isActive: $pushChart
-            ) {
-                EmptyView()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                mapSection()
+                routeHeaderSection()
+                titleSection()
+                summaryCardSection()
+                trafficSection()
+                weatherDetailSection()
+                transitSection()
+                aiInsightSection()
+                actionButtonsSection()
+                Spacer(minLength: 8)
             }
-            .hidden()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    mapSection()
-                    routeHeaderSection()
-                    titleSection()
-                    summaryCardSection()
-                    weatherDetailSection()
-                    transitSection()
-                    aiInsightSection()
-                    actionButtonsSection()
-                    Spacer(minLength: 8)
-                }
-                .padding()
-            }
+            .padding()
         }
         .navigationTitle("Rota Detayı")
         .navigationBarTitleDisplayMode(.inline)
@@ -51,6 +49,15 @@ struct RouteDetailView: View {
             }
             await loadUserProfileIfNeeded()
             await refreshAIRecommendation()
+            await badgeVM.loadUserStats()
+            await fetchTrafficInfo()
+        }
+        .alert("🎉 Yeni Rozet!", isPresented: $badgeVM.showBadgeUnlockedAlert) {
+            Button("Harika!", role: .cancel) {}
+        } message: {
+            if let badge = badgeVM.recentlyUnlocked {
+                Text("\(badge.title) rozetini kazandın!\n+\(badge.points) puan")
+            }
         }
         .onAppear {
             // Ensure location permission and start
@@ -105,14 +112,19 @@ struct RouteDetailView: View {
         .onChange(of: viewModel.busConsumptionPer100, initial: false) { _, _ in
             Task { await refreshAIRecommendation() }
         }
-        // NavigationDestination kaldırıldı; NavigationLink kullanıyoruz.
-    }
-
-    // EmissionChartView için VM üretici
-    private func makeStatsVM() -> EmissionStatsViewModel {
-        let vm = EmissionStatsViewModel()
-        vm.selectedMode = viewModel.selectedMode
-        return vm
+        .alert("Eksik Bilgi", isPresented: $showTransitWarning) {
+            Button("Tamam", role: .cancel) { }
+        } message: {
+            Text("Otobüs seçildiğinde yakıt türü, 100 km tüketim ve hat türü bilgileri zorunludur.")
+        }
+        .sheet(isPresented: $showEmissionChart) {
+            NavigationView {
+                EmissionChartView(viewModel: emissionStatsVM)
+                    .navigationBarItems(leading: Button("Kapat") {
+                        showEmissionChart = false
+                    })
+            }
+        }
     }
 
     // MARK: - Sections
@@ -148,6 +160,19 @@ struct RouteDetailView: View {
             emissionKg: viewModel.emissionKg(),
             weather: viewModel.weatherInfo
         )
+    }
+    
+    @ViewBuilder
+    private func trafficSection() -> some View {
+        if viewModel.selectedMode == .car {
+            TrafficCardView(
+                traffic: trafficInfo,
+                isLoading: trafficService.isLoading,
+                onRefresh: {
+                    await fetchTrafficInfo()
+                }
+            )
+        }
     }
     
     @ViewBuilder
@@ -192,62 +217,98 @@ struct RouteDetailView: View {
 
     @ViewBuilder
     private func applyAIButton() -> some View {
+        let isValid = isTransitValid()
         Button {
+            guard isValid else {
+                showTransitWarning = true
+                return
+            }
             let modeToApply = recommendation?.mode ?? bestModeForCurrentDistance()
             if modeToApply != viewModel.selectedMode {
                 viewModel.selectedMode = modeToApply
             }
             Task {
-                // 1) Rota hazır değilse oluştur
                 if viewModel.routePolyline == nil || viewModel.distanceMeters <= 0 {
                     if viewModel.canCreateRoute { await viewModel.buildRoute() }
                 } else {
-                    // zaten seçim değiştiyse tekrar hesapla
                     await viewModel.buildRoute()
                 }
-                // 2) Seçimi AI olarak KAYDET
                 await viewModel.persistSelectedJourney(aiApplied: true)
-                // 3) İçgörüyü yenile
+                
+                // Rozet sistemine kaydet
+                let distanceKm = viewModel.distanceMeters / 1000
+                let emissionKg = emissionKg(for: modeToApply)
+                await badgeVM.recordJourney(
+                    mode: modeToApply,
+                    distanceKm: distanceKm,
+                    emissionKg: emissionKg,
+                    aiUsed: true
+                )
+                
                 await refreshAIRecommendation()
             }
         } label: {
-            FilledActionButton(
-                title: "AI'yı tercih et",
-                systemName: "wand.and.stars",
-                background: .green
-            )
+            HStack(spacing: 8) {
+                Image(systemName: "leaf.fill")
+                Text("Akıllı Öneri")
+                    .fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(isValid ? Color.primary : Color(.systemGray4))
+            .foregroundColor(isValid ? Color(.systemBackground) : Color(.systemGray2))
+            .cornerRadius(12)
         }
-        .contentShape(Rectangle())
         .buttonStyle(.plain)
+        .disabled(!isValid)
     }
 
     @ViewBuilder
     private func applyUserChoiceButton() -> some View {
+        let isValid = isTransitValid()
         Button {
+            guard isValid else {
+                showTransitWarning = true
+                return
+            }
             if let preferred = userPreferredMode {
                 viewModel.selectedMode = preferred
             }
             Task {
-                // 1) Rota hazır değilse oluştur
                 if viewModel.routePolyline == nil || viewModel.distanceMeters <= 0 {
                     if viewModel.canCreateRoute { await viewModel.buildRoute() }
                 } else {
                     await viewModel.buildRoute()
                 }
-                // 2) Seçimi KULLANICI tercihi olarak KAYDET
                 await viewModel.persistSelectedJourney(aiApplied: false)
-                // 3) İçgörüyü yenile
+                
+                // Rozet sistemine kaydet
+                let distanceKm = viewModel.distanceMeters / 1000
+                let mode = userPreferredMode ?? viewModel.selectedMode
+                let emissionKg = emissionKg(for: mode)
+                await badgeVM.recordJourney(
+                    mode: mode,
+                    distanceKm: distanceKm,
+                    emissionKg: emissionKg,
+                    aiUsed: false
+                )
+                
                 await refreshAIRecommendation()
             }
         } label: {
-            FilledActionButton(
-                title: "Benim tercihim",
-                systemName: "hand.tap",
-                background: .gray.opacity(0.8)
-            )
+            HStack(spacing: 8) {
+                Image(systemName: "hand.tap")
+                Text("Tercihim")
+                    .fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(isValid ? Color(.systemGray5) : Color(.systemGray4))
+            .foregroundColor(isValid ? .primary : Color(.systemGray2))
+            .cornerRadius(12)
         }
-        .contentShape(Rectangle())
         .buttonStyle(.plain)
+        .disabled(!isValid)
     }
 
     @ViewBuilder
@@ -255,29 +316,23 @@ struct RouteDetailView: View {
         if #available(iOS 16.0, *) {
             Button {
                 Task {
-                    // Eğer mesafe henüz 0 ise ya da rota yoksa önce rotayı oluştur.
-                    if viewModel.distanceMeters <= 0 || viewModel.routePolyline == nil {
-                        if viewModel.canCreateRoute {
-                            await viewModel.buildRoute()
-                        }
-                    }
-                    // Ardından güncel seçili moda göre yolculuğu kaydet.
-                    await viewModel.persistCurrentJourney()
-                    // Ve grafiğe geç.
-                    await MainActor.run { pushChart = true }
+                    emissionStatsVM.selectedMode = viewModel.selectedMode
+                    await emissionStatsVM.load()
+                    await MainActor.run { showEmissionChart = true }
                 }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "chart.bar.fill")
-                    Text("Emisyon grafiği")
-                        .fontWeight(.semibold)
+                    Text("Emisyon Grafiğini Gör")
+                        .fontWeight(.medium)
                 }
                 .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
+                .padding(.vertical, 14)
+                .background(Color(.systemGray6))
+                .foregroundColor(.primary)
                 .cornerRadius(12)
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -333,6 +388,35 @@ struct RouteDetailView: View {
             } catch {
                 print("Profile fetch error: \(error)")
             }
+        }
+    }
+    
+    private func fetchTrafficInfo() async {
+        guard viewModel.selectedMode == .car else { return }
+        guard let origin = LocationDelegate.shared.lastLocation?.coordinate else { return }
+        
+        // Hedef koordinatını al (basit geocoding)
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.geocodeAddressString(viewModel.destinationText)
+            if let destination = placemarks.first?.location?.coordinate {
+                trafficInfo = await trafficService.fetchTrafficInfo(
+                    from: origin,
+                    to: destination,
+                    expectedTime: viewModel.expectedTime,
+                    distanceMeters: viewModel.distanceMeters
+                )
+                
+                // Trafik yoğunsa bildirim gönder
+                if let traffic = trafficInfo, traffic.severity == .heavy || traffic.severity == .severe {
+                    await NotificationManager.shared.sendTrafficAlertNotification(
+                        severity: traffic.severity,
+                        routeDescription: viewModel.destinationText
+                    )
+                }
+            }
+        } catch {
+            print("❌ Geocoding hatası: \(error)")
         }
     }
 
@@ -522,6 +606,23 @@ struct RouteDetailView: View {
                                 reasons: reasons,
                                 potentialSavingsKg: savings)
     }
+    
+    // Validation helper
+    private func isTransitValid() -> Bool {
+        // Yürüyüş veya araba modunda validasyon gerekmiyor
+        if viewModel.selectedMode == .walking || viewModel.selectedMode == .car {
+            return true
+        }
+        
+        // Transit modunda validasyon gerekli
+        if viewModel.selectedMode == .transit {
+            return viewModel.busFuelType != nil &&
+                   viewModel.busConsumptionPer100 != nil &&
+                   viewModel.busRouteKind != nil
+        }
+        
+        return true
+    }
 }
 
 // MARK: - Models used only by this file
@@ -573,7 +674,7 @@ private struct SummaryRow: View {
     }
 }
 
-// Rich AI insight card
+// Rich AI insight card - SADE VE OKUNABİLİR
 private struct AIInsightCard: View {
     let recommendation: AIRecommendation?
     let distanceMeters: Double
@@ -582,63 +683,97 @@ private struct AIInsightCard: View {
     let profile: UserProfile?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Yapay Zeka İçgörüsü").font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundColor(.yellow)
+                Text("Akıllı Öneri")
+                    .font(.headline)
+            }
 
             if let rec = recommendation {
-                Text(rec.summary)
-                    .fontWeight(.semibold)
-
-                if !rec.reasons.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(rec.reasons, id: \.self) { line in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text("•")
-                                Text(line).foregroundColor(.secondary)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: modeIcon(rec.mode))
+                            .foregroundColor(.green)
+                        Text(modeText(rec.mode))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    }
+                    
+                    Text(rec.summary)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    if rec.potentialSavingsKg > 0 {
+                        HStack {
+                            Image(systemName: "leaf.fill")
+                                .foregroundColor(.green)
+                            Text("Tasarruf: \(String(format: "%.2f", rec.potentialSavingsKg)) kg CO₂")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
                         }
+                        .padding(.top, 4)
                     }
                 }
             } else {
-                Text("Veriler yükleniyor. Mesafe, hava durumu ve profil bilgilerine göre en uygun ulaşım modu önerilecek.")
+                Text("Veriler hazırlanıyor...")
                     .foregroundColor(.secondary)
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.1)))
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    private func modeIcon(_ mode: TransportMode) -> String {
+        switch mode {
+        case .walking: return "figure.walk"
+        case .car: return "car.fill"
+        case .transit: return "bus.fill"
+        }
+    }
+    
+    private func modeText(_ mode: TransportMode) -> String {
+        switch mode {
+        case .walking: return "Yürüyüş"
+        case .car: return "Araba"
+        case .transit: return "Toplu Taşıma"
+        }
     }
 }
 
-// Route header card
+// Route header card - SADE TASARIM
 private struct RouteHeaderCard: View {
     let originText: String
     let destinationText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "location.fill").foregroundColor(.blue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Nereden").font(.caption).foregroundColor(.secondary)
-                    Text(originText).fontWeight(.semibold).lineLimit(2)
-                }
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                Text(originText)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            HStack(spacing: 12) {
-                Rectangle().fill(Color.secondary.opacity(0.3)).frame(width: 2, height: 12).padding(.leading, 4)
-                Rectangle().fill(Color.clear).frame(height: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Divider()
+            
+            HStack(spacing: 10) {
+                Image(systemName: "location.fill")
+                    .font(.caption)
+                    .foregroundColor(.red)
+                Text(destinationText)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
             }
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "mappin.and.ellipse").foregroundColor(.red)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Nereye").font(.caption).foregroundColor(.secondary)
-                    Text(destinationText).fontWeight(.semibold).lineLimit(2)
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
+        .background(Color(.systemGray6))
         .cornerRadius(12)
     }
 }
@@ -687,7 +822,7 @@ private struct WeatherInlineBadge: View {
     }
 }
 
-// Summary card with weather
+// Summary card with weather - MODERN 6 KARTLI TASARIM
 private struct SummaryCard: View {
     let selectedMode: TransportMode
     let distanceMeters: Double
@@ -696,35 +831,142 @@ private struct SummaryCard: View {
     let weather: WeatherInfo?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SummaryRow(label: "Ulaşım", value: selectedMode.rawValue.capitalized)
-            SummaryRow(label: "Mesafe", value: "\(String(format: "%.1f", distanceMeters / 1000)) km")
-            SummaryRow(label: "Süre", value: "\(Int(expectedTime / 60)) dk")
-            SummaryRow(label: "Varış", value: Date().addingTimeInterval(expectedTime)
-                .formatted(date: .omitted, time: .shortened))
-            SummaryRow(label: "Karbon", value: "\(String(format: "%.2f", emissionKg)) kg CO₂")
-
-            if let speedText = averageSpeedText(distanceMeters: distanceMeters, expectedTime: expectedTime) {
-                SummaryRow(label: "Ort. Hız", value: speedText)
+        VStack(spacing: 12) {
+            // İlk satır: Ulaşım, Mesafe, Süre
+            HStack(spacing: 10) {
+                StatCardView(
+                    icon: modeIcon(),
+                    title: modeTitle(),
+                    value: "ULAŞIM",
+                    color: .primary
+                )
+                StatCardView(
+                    icon: "arrow.left.and.right",
+                    title: String(format: "%.1f", distanceMeters / 1000),
+                    value: "km",
+                    subtitle: "MESAFE",
+                    color: .blue
+                )
+                StatCardView(
+                    icon: "clock",
+                    title: formatDuration(expectedTime),
+                    value: "",
+                    subtitle: "SÜRE",
+                    color: .orange
+                )
             }
-
-            if let w = weather {
-                WeatherInlineBadge(weather: w)
+            
+            // İkinci satır: Varış, Karbon, Hava
+            HStack(spacing: 10) {
+                StatCardView(
+                    icon: "flag.checkered",
+                    title: Date().addingTimeInterval(expectedTime).formatted(date: .omitted, time: .shortened),
+                    value: "",
+                    subtitle: "VARIŞ SAATİ",
+                    color: .green
+                )
+                StatCardView(
+                    icon: "leaf",
+                    title: String(format: "%.2f", emissionKg),
+                    value: "kg CO₂",
+                    subtitle: "KARBON",
+                    color: emissionKg == 0 ? .green : .orange
+                )
+                if let w = weather {
+                    StatCardView(
+                        icon: weatherIcon(w.condition),
+                        title: String(format: "%.0f°C", w.temperatureC),
+                        value: "",
+                        subtitle: "HAVA",
+                        color: .cyan
+                    )
+                } else {
+                    StatCardView(
+                        icon: "cloud",
+                        title: "--",
+                        value: "",
+                        subtitle: "HAVA",
+                        color: .gray
+                    )
+                }
             }
         }
-        .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.1)))
     }
+    
+    private func modeIcon() -> String {
+        switch selectedMode {
+        case .walking: return "figure.walk"
+        case .car: return "car.fill"
+        case .transit: return "bus.fill"
+        }
+    }
+    
+    private func modeTitle() -> String {
+        switch selectedMode {
+        case .walking: return "Yürü"
+        case .car: return "Araba"
+        case .transit: return "Otobüs"
+        }
+    }
+    
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalMinutes = Int(seconds / 60)
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        
+        if hours > 0 {
+            return "\(hours):\(String(format: "%02d", minutes))"
+        } else {
+            return "\(minutes) dk"
+        }
+    }
+    
+    private func weatherIcon(_ condition: WeatherInfo.Condition) -> String {
+        switch condition {
+        case .clear: return "sun.max.fill"
+        case .clouds: return "cloud.fill"
+        case .rain: return "cloud.rain.fill"
+        case .snow: return "snow"
+        case .unknown: return "cloud"
+        }
+    }
+}
 
-    private func averageSpeedText(distanceMeters: Double, expectedTime: TimeInterval) -> String? {
-        guard expectedTime > 0, distanceMeters > 0 else { return nil }
-        let km = distanceMeters / 1000
-        let hours = expectedTime / 3600
-        guard hours > 0 else { return nil }
-        let speed = km / hours
-        return "\(String(format: "%.1f", speed)) km/sa"
+// MARK: - İstatistik Kartı Bileşeni
+private struct StatCardView: View {
+    let icon: String
+    let title: String
+    let value: String
+    var subtitle: String = ""
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+            
+            Text(title)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+            
+            if !value.isEmpty {
+                Text(value)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
     }
 }
 
@@ -732,11 +974,29 @@ private struct SummaryCard: View {
 private struct TransitEmissionCard: View {
     @ObservedObject var viewModel: RouteViewModel
     @Binding var busConsumptionField: String
+    
+    private var isComplete: Bool {
+        viewModel.busFuelType != nil &&
+        viewModel.busConsumptionPer100 != nil &&
+        viewModel.busRouteKind != nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Otobüs Kişi Başı Emisyonu")
-                .font(.headline)
+            HStack {
+                Text("Otobüs Kişi Başı Emisyonu")
+                    .font(.headline)
+                if !isComplete {
+                    Spacer()
+                    Text("Zorunlu")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(6)
+                }
+            }
 
             let distanceText = String(format: "%.1f", viewModel.distanceMeters/1000)
             Text("Yakıt türü ve tüketimi girin; hat türünü seçin. Mesafe \(distanceText) km üzerinden kişi başı CO₂ hesaplanır.")
@@ -745,7 +1005,7 @@ private struct TransitEmissionCard: View {
             // Inputs
             HStack {
                 Text("Yakıt Türü")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(viewModel.busFuelType == nil ? .red : .secondary)
                 Spacer()
                 Picker("Yakıt Türü", selection: Binding<BusFuelType?>(
                     get: { viewModel.busFuelType },
@@ -757,25 +1017,40 @@ private struct TransitEmissionCard: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .foregroundColor(viewModel.busFuelType == nil ? .red : .primary)
             }
+            .padding(10)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(viewModel.busFuelType == nil ? Color.red : Color.clear, lineWidth: 1)
+            )
 
             HStack {
                 Text("100 km Tüketim")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(viewModel.busConsumptionPer100 == nil ? .red : .secondary)
                 Spacer()
                 TextField("örn. 35", text: $busConsumptionField)
                     .multilineTextAlignment(.trailing)
                     .keyboardType(.decimalPad)
                     .frame(width: 120)
-                    .onChange(of: busConsumptionField) { newValue in
+                    .onChange(of: busConsumptionField) { _, newValue in
                         let normalized = newValue.replacingOccurrences(of: ",", with: ".")
                         viewModel.busConsumptionPer100 = Double(normalized)
                     }
             }
+            .padding(10)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(viewModel.busConsumptionPer100 == nil ? Color.red : Color.clear, lineWidth: 1)
+            )
 
             HStack {
                 Text("Hat Türü")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(viewModel.busRouteKind == nil ? .red : .secondary)
                 Spacer()
                 Picker("Hat Türü", selection: Binding<BusRouteKind?>(
                     get: { viewModel.busRouteKind },
@@ -787,7 +1062,15 @@ private struct TransitEmissionCard: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .foregroundColor(viewModel.busRouteKind == nil ? .red : .primary)
             }
+            .padding(10)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(viewModel.busRouteKind == nil ? Color.red : Color.clear, lineWidth: 1)
+            )
 
             // Result and formulas
             if let r = viewModel.computeTransitPerPassengerEmission() {
@@ -827,41 +1110,41 @@ private struct TransitEmissionCard: View {
     }
 }
 
-// Detailed weather card
+// Detailed weather card - SADE
 private struct WeatherDetailCard: View {
     let weather: WeatherInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
                 Image(systemName: icon(for: weather.condition))
                     .foregroundColor(color(for: weather.condition))
-                Text("Hava Durumu")
-                    .font(.headline)
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(conditionDisplayText(weather.condition))
+                        .font(.headline)
+                    Text("\(String(format: "%.0f", weather.temperatureC))°C")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                }
+                
                 Spacer()
-                Text("\(String(format: "%.1f", weather.temperatureC))°C")
-                    .fontWeight(.semibold)
             }
-            HStack {
-                Label("Hissedilen: \(String(format: "%.1f", weather.feelsLikeC))°C", systemImage: "thermometer")
-                Spacer()
-                Label("Nem: \(weather.humidity)%", systemImage: "drop.fill")
+            
+            HStack(spacing: 16) {
+                Label("\(String(format: "%.0f", weather.windSpeed)) m/s", systemImage: "wind")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Label("\(weather.humidity)%", systemImage: "drop.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .foregroundColor(.secondary)
-            HStack {
-                Label("Rüzgar: \(String(format: "%.1f", weather.windSpeed)) m/s", systemImage: "wind")
-                Spacer()
-                let normalized = normalizedPrecipitationChance(for: weather)
-                Label("Yağış olasılığı: \(Int(normalized * 100))%", systemImage: "cloud.rain")
-            }
-            .foregroundColor(.secondary)
-            Text(conditionDisplayText(weather.condition))
-                .foregroundColor(.secondary)
         }
         .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.secondary.opacity(0.1)))
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
     }
 
     private func icon(for c: WeatherInfo.Condition) -> String {

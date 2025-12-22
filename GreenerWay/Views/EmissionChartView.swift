@@ -11,70 +11,151 @@ enum ChartScope: String, CaseIterable, Identifiable {
 struct EmissionChartView: View {
     @ObservedObject var viewModel: EmissionStatsViewModel
     @State private var scope: ChartScope = .daily
+    @State private var isLoading = false
+    @State private var hasLoaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+            
+                // Mod seçici
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Ulaşım Modu")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Picker("Mod", selection: $viewModel.selectedMode) {
+                        Text("Yürüyüş").tag(TransportMode.walking)
+                        Text("Araba").tag(TransportMode.car)
+                        Text("Otobüs").tag(TransportMode.transit)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: viewModel.selectedMode) { _, newValue in
+                        viewModel.setMode(newValue)
+                    }
+                }
+                Text("🚗 Araba").tag(TransportMode.car)
+                Text("🚌 Toplu Taşıma").tag(TransportMode.transit)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: viewModel.selectedMode) { oldValue, newValue in
+                Task {
+                    isLoading = true
+                    await viewModel.load()
+                    isLoading = false
+                }
+            }
 
-            Picker("", selection: $scope) {
+            Picker("Zaman Aralığı", selection: $scope) {
                 ForEach(ChartScope.allCases) { s in
                     Text(s.rawValue).tag(s)
                 }
             }
             .pickerStyle(.segmented)
 
-            Group {
-                switch scope {
-                case .daily:
-                    let todayKg = viewModel.last7Days.last?.kg ?? 0
-                    SummaryRow(label: "Bugün (kg)", value: String(format: "%.2f", todayKg))
-                case .monthly:
-                    let current = viewModel.last6Months.last?.kg ?? 0
-                    SummaryRow(label: "Bu Ay (kg)", value: String(format: "%.2f", current))
-                case .total:
-                    SummaryRow(label: "Toplam (kg)", value: String(format: "%.2f", viewModel.totalEmissionKg))
+            if isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView("Veriler yükleniyor...")
+                    Spacer()
                 }
-            }
-
-            Group {
-                switch scope {
-                case .daily:
-                    Chart(viewModel.last7Days) { p in
-                        BarMark(
-                            x: .value("Gün", p.date, unit: .day),
-                            y: .value("kg", p.kg)
-                        )
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .day)) { _ in
-                            AxisGridLine()
-                            AxisTick()
-                            AxisValueLabel(format: .dateTime.day().weekday(.short))
+                .frame(height: 300)
+            } else if viewModel.last7Days.isEmpty && viewModel.totalEmissionKg == 0 {
+                VStack(spacing: 16) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                    Text("Henüz yolculuk verisi yok")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text("Rota oluştur, 'AI'yı tercih et' veya 'Benim tercihim' butonuna bas! 🌱")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button("Yenile") {
+                        Task {
+                            isLoading = true
+                            await viewModel.load()
+                            isLoading = false
                         }
                     }
-                    .frame(height: 260)
-
-                case .monthly:
-                    Chart(viewModel.last6Months) { p in
-                        BarMark(
-                            x: .value("Ay", p.monthStart, unit: .month),
-                            y: .value("kg", p.kg)
-                        )
+                    .padding()
+                    .background(Color.green)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .frame(height: 300)
+            } else {
+                Group {
+                    switch scope {
+                    case .daily:
+                        let todayKg = viewModel.last7Days.last?.kg ?? 0
+                        SummaryRow(label: "Bugün (kg)", value: String(format: "%.2f", todayKg))
+                    case .monthly:
+                        let current = viewModel.last6Months.last?.kg ?? 0
+                        SummaryRow(label: "Bu Ay (kg)", value: String(format: "%.2f", current))
+                    case .total:
+                        SummaryRow(label: "Toplam (kg)", value: String(format: "%.2f", viewModel.totalEmissionKg))
                     }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .month)) { _ in
-                            AxisGridLine()
-                            AxisTick()
-                            AxisValueLabel(format: .dateTime.month(.abbreviated))
+                }
+
+                Group {
+                    switch scope {
+                    case .daily:
+                        if viewModel.last7Days.isEmpty {
+                            Text("Bu mod için günlük veri yok")
+                                .foregroundColor(.secondary)
+                                .frame(height: 260)
+                        } else {
+                            Chart(viewModel.last7Days) { p in
+                                BarMark(
+                                    x: .value("Gün", p.date, unit: .day),
+                                    y: .value("kg", p.kg)
+                                )
+                                .foregroundStyle(.green)
+                            }
+                            .chartXAxis {
+                                AxisMarks(values: .stride(by: .day)) { _ in
+                                    AxisGridLine()
+                                    AxisTick()
+                                    AxisValueLabel(format: .dateTime.day().weekday(.short))
+                                }
+                            }
+                            .frame(height: 260)
                         }
-                    }
-                    .frame(height: 260)
 
-                case .total:
-                    Chart {
-                        BarMark(x: .value("Toplam", "Karbon"),
-                                y: .value("kg", viewModel.totalEmissionKg))
+                    case .monthly:
+                        if viewModel.last6Months.isEmpty {
+                            Text("Bu mod için aylık veri yok")
+                                .foregroundColor(.secondary)
+                                .frame(height: 260)
+                        } else {
+                            Chart(viewModel.last6Months) { p in
+                                BarMark(
+                                    x: .value("Ay", p.monthStart, unit: .month),
+                                    y: .value("kg", p.kg)
+                                )
+                                .foregroundStyle(.blue)
+                            }
+                            .chartXAxis {
+                                AxisMarks(values: .stride(by: .month)) { _ in
+                                    AxisGridLine()
+                                    AxisTick()
+                                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                                }
+                            }
+                            .frame(height: 260)
+                        }
+
+                    case .total:
+                        Chart {
+                            BarMark(x: .value("Toplam", "Karbon"),
+                                    y: .value("kg", viewModel.totalEmissionKg))
+                            .foregroundStyle(.orange)
+                        }
+                        .frame(height: 220)
                     }
-                    .frame(height: 220)
                 }
             }
 
@@ -118,12 +199,17 @@ struct EmissionChartView: View {
             Spacer()
         }
         .padding()
-        .navigationTitle("Emisyon Grafik")
+        .navigationTitle("Emisyon Grafiği")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(false)
         .task {
-            // Grafik ve içgörülerin yüklenmesi
-            await viewModel.load()
+            // Sayfa açıldığında verileri otomatik yükle
+            if !hasLoaded {
+                isLoading = true
+                await viewModel.load()
+                isLoading = false
+                hasLoaded = true
+            }
         }
     }
 }

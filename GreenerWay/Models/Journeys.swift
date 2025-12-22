@@ -8,4 +8,6 @@ struct Journey: Identifiable, Codable {
     var distanceKm: Double
     var emissionKg: Double
     var mode: String
+    var durationMin: Double? // Süre (dakika)
+    var aiApplied: Bool? // AI önerisi uygulandı mı?
 }
