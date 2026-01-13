@@ -33,19 +33,19 @@ struct MapView: UIViewRepresentable {
         if let from = viewModel.originCoordinate {
             let a = MKPointAnnotation()
             a.coordinate = from
-            a.title = "Başlangıç"
+            a.title = "📍 Başlangıç"
             map.addAnnotation(a)
         }
         if let to = viewModel.destinationCoordinate {
             let b = MKPointAnnotation()
             b.coordinate = to
-            b.title = "Varış"
+            b.title = "🎯 Varış"
             map.addAnnotation(b)
         }
 
         if let poly = viewModel.routePolyline {
             map.addOverlay(poly)
-            let edge = UIEdgeInsets(top: 100, left: 80, bottom: 120, right: 80)
+            let edge = UIEdgeInsets(top: 120, left: 80, bottom: 140, right: 80)
             map.setVisibleMapRect(poly.boundingMapRect, edgePadding: edge, animated: true)
             context.coordinator.didZoomToUserOnce = true
             return
@@ -128,11 +128,41 @@ struct MapView: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let line = overlay as? MKPolyline {
                 let r = MKPolylineRenderer(overlay: line)
-                r.lineWidth = 5
+                r.lineWidth = 6
                 r.strokeColor = UIColor.systemBlue
+                r.lineCap = .round
+                r.lineJoin = .round
                 return r
             }
             return MKOverlayRenderer(overlay: overlay)
+        }
+        
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard !(annotation is MKUserLocation) else { return nil }
+            
+            let identifier = "CustomPin"
+            var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+            
+            if annotationView == nil {
+                annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                annotationView?.canShowCallout = true
+                annotationView?.animatesWhenAdded = true
+            } else {
+                annotationView?.annotation = annotation
+            }
+            
+            // Başlangıç - Yeşil, Varış - Kırmızı
+            if annotation.title == "📍 Başlangıç" {
+                annotationView?.markerTintColor = .systemGreen
+                annotationView?.glyphImage = UIImage(systemName: "figure.walk")
+            } else {
+                annotationView?.markerTintColor = .systemRed
+                annotationView?.glyphImage = UIImage(systemName: "flag.fill")
+            }
+            
+            annotationView?.displayPriority = .required
+            
+            return annotationView
         }
     }
 }

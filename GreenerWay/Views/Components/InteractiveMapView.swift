@@ -80,7 +80,9 @@ struct InteractiveMapView: UIViewRepresentable {
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor.systemBlue
-                renderer.lineWidth = 4
+                renderer.lineWidth = 5
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
@@ -95,12 +97,14 @@ struct InteractiveMapView: UIViewRepresentable {
             if annotationView == nil {
                 annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
                 annotationView?.canShowCallout = true
+                annotationView?.animatesWhenAdded = true
             } else {
                 annotationView?.annotation = annotation
             }
             
-            annotationView?.markerTintColor = .systemOrange
+            annotationView?.markerTintColor = .systemRed
             annotationView?.glyphImage = UIImage(systemName: "mappin.circle.fill")
+            annotationView?.displayPriority = .required
             
             return annotationView
         }

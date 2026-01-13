@@ -149,9 +149,13 @@ private struct FilterChip: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(isSelected ? Color.primary : Color(.systemGray6))
+            .background(isSelected ? Color.primary : Color(.secondarySystemGroupedBackground))
             .foregroundColor(isSelected ? Color(.systemBackground) : .primary)
             .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : Color.primary.opacity(0.1), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -177,7 +181,7 @@ private struct StatMiniCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 }

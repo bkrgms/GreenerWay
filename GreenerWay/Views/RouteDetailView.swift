@@ -249,7 +249,7 @@ struct RouteDetailView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "leaf.fill")
+                Image(systemName: "sparkles")
                 Text("Akıllı Öneri")
                     .fontWeight(.semibold)
             }
@@ -303,9 +303,13 @@ struct RouteDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(isValid ? Color(.systemGray5) : Color(.systemGray4))
+            .background(isValid ? Color(.secondarySystemGroupedBackground) : Color(.systemGray4))
             .foregroundColor(isValid ? .primary : Color(.systemGray2))
             .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(!isValid)
@@ -324,13 +328,17 @@ struct RouteDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.bar.fill")
                     Text("Emisyon Grafiğini Gör")
-                        .fontWeight(.medium)
+                        .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color(.systemGray6))
+                .background(Color(.secondarySystemGroupedBackground))
                 .foregroundColor(.primary)
                 .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }
@@ -722,7 +730,7 @@ private struct AIInsightCard: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
     
@@ -773,7 +781,7 @@ private struct RouteHeaderCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 }
@@ -964,8 +972,9 @@ private struct StatCardView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color(.systemGray6))
+        .frame(minHeight: 110)
+        .padding(.vertical, 12)
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 }
@@ -1020,7 +1029,7 @@ private struct TransitEmissionCard: View {
                 .foregroundColor(viewModel.busFuelType == nil ? .red : .primary)
             }
             .padding(10)
-            .background(Color(.systemGray6))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -1041,7 +1050,7 @@ private struct TransitEmissionCard: View {
                     }
             }
             .padding(10)
-            .background(Color(.systemGray6))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -1065,7 +1074,7 @@ private struct TransitEmissionCard: View {
                 .foregroundColor(viewModel.busRouteKind == nil ? .red : .primary)
             }
             .padding(10)
-            .background(Color(.systemGray6))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -1105,8 +1114,8 @@ private struct TransitEmissionCard: View {
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 }
 
@@ -1143,7 +1152,7 @@ private struct WeatherDetailCard: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 

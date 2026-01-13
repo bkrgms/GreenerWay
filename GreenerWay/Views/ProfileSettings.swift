@@ -5,151 +5,67 @@ struct ProfileSettings: View {
     @StateObject private var profileVM = ProfileSettingsViewModel()
     @Environment(\.dismiss) var dismiss
     @State private var showValidationWarning = false
+    @State private var ageText: String = ""
     
     // Validasyon kontrolü
     private var isProfileValid: Bool {
-        profileVM.age > 0 && profileVM.age < 120
+        guard let age = Int(ageText) else { return false }
+        return age > 0 && age < 120
     }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
-                // MARK: - Kişisel Bilgiler
+                // MARK: - Profil Bilgileri
                 VStack(alignment: .leading, spacing: 16) {
-                    SectionHeaderView(title: "Kişisel Bilgiler", icon: "person.fill")
+                    HStack {
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.blue)
+                        Text("Profil Bilgileri")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
                     
                     // Yaş (Zorunlu)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("Yaş")
                                 .foregroundColor(.secondary)
                             Text("*")
                                 .foregroundColor(.red)
-                            Spacer()
-                            TextField("", value: $profileVM.age, formatter: NumberFormatter.intFormatter)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 60)
                         }
-                        if profileVM.age <= 0 || profileVM.age >= 120 {
-                            Text("Geçerli bir yaş giriniz")
+                        
+                        TextField("Yaşınızı giriniz", text: $ageText)
+                            .keyboardType(.numberPad)
+                            .font(.body)
+                            .padding()
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(isProfileValid || ageText.isEmpty ? Color.primary.opacity(0.1) : Color.red.opacity(0.5), lineWidth: 1)
+                            )
+                        
+                        if !ageText.isEmpty && !isProfileValid {
+                            Text("Lütfen 1-119 arası geçerli bir yaş giriniz")
                                 .font(.caption)
                                 .foregroundColor(.red)
                         }
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(profileVM.age > 0 && profileVM.age < 120 ? Color.clear : Color.red.opacity(0.5), lineWidth: 1)
-                    )
-                    
-                // Sağlık Durumu
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Sağlık Durumu")
-                        .foregroundColor(.secondary)
-                        .font(.subheadline)
-                    
-                    Picker("Sağlık Durumu", selection: $profileVM.healthStatus) {
-                        Text("Normal").tag("Normal")
-                        Text("Hassas").tag("Hassas")
-                        Text("Kronik Rahatsızlık").tag("Kronik Rahatsızlık")
-                    }
-                    .pickerStyle(.segmented)
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(12)
-                    
-                    // Çocukla Seyahat
-                    Toggle(isOn: $profileVM.travellingWithChild) {
-                        HStack {
-                            Image(systemName: "figure.and.child.holdinghands")
-                                .foregroundColor(.secondary)
-                            Text("Çocuk ile Seyahat")
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                // MARK: - Araç Bilgileri
-                VStack(alignment: .leading, spacing: 16) {
-                    SectionHeaderView(title: "Araç Bilgileri", icon: "car.fill")
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Araç Tipi")
-                            .foregroundColor(.secondary)
-                            .font(.subheadline)
-                        
-                        Picker("Araç Tipi", selection: $profileVM.selectedVehicleType) {
-                            ForEach(VehicleType.allCases) { type in
-                                Text(type.rawValue).tag(type)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .frame(height: 120)
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                // MARK: - Çevre Duyarlılığı
-                VStack(alignment: .leading, spacing: 16) {
-                    SectionHeaderView(title: "Çevre Duyarlılığı", icon: "leaf.fill")
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Karbon Duyarlılığı")
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Text("\(Int(profileVM.carbonSensitivity * 100))%")
-                                .fontWeight(.medium)
-                        }
-                        Slider(value: $profileVM.carbonSensitivity, in: 0...1, step: 0.1)
-                            .tint(.primary)
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
-                }
-                
-                // MARK: - Rozetler
-                VStack(alignment: .leading, spacing: 16) {
-                    SectionHeaderView(title: "Kazanılan Rozetler", icon: "medal.fill")
-                    
-                    if profileVM.earnedBadges.isEmpty {
-                        HStack {
-                            Image(systemName: "trophy")
-                                .foregroundColor(.secondary.opacity(0.5))
-                            Text("Henüz rozet kazanılmadı")
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    } else {
-                        VStack(spacing: 10) {
-                            ForEach(profileVM.earnedBadges, id: \.self) { badgeId in
-                                BadgeRowView(badgeId: badgeId)
-                            }
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    }
-                }
                 
                 // MARK: - Kaydet Butonu
                 Button {
                     if isProfileValid {
-                        Task {
-                            await profileVM.saveUserProfile()
-                            dismiss()
+                        if let age = Int(ageText) {
+                            profileVM.age = age
+                            Task {
+                                await profileVM.saveUserProfile()
+                                dismiss()
+                            }
                         }
                     } else {
                         showValidationWarning = true
@@ -163,21 +79,17 @@ struct ProfileSettings: View {
                         .foregroundColor(isProfileValid ? Color(.systemBackground) : .secondary)
                         .cornerRadius(12)
                 }
+                .disabled(!isProfileValid)
                 
                 Spacer().frame(height: 20)
             }
             .padding()
         }
-        .background(Color(.systemBackground))
+        .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Geçersiz Bilgi", isPresented: $showValidationWarning) {
-            Button("Tamam", role: .cancel) { }
-        } message: {
-            Text("Lütfen geçerli bir yaş giriniz (1-119 arası).")
-        }
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Profil")
+                Text("Profil Ayarları")
                     .font(.headline)
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -185,63 +97,22 @@ struct ProfileSettings: View {
                     authViewModel.signOut()
                 } label: {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .foregroundColor(.red.opacity(0.8))
+                        .foregroundColor(.red)
                 }
             }
         }
-        .alert("Eksik Bilgi", isPresented: $showValidationWarning) {
+        .alert("Geçersiz Bilgi", isPresented: $showValidationWarning) {
             Button("Tamam", role: .cancel) { }
         } message: {
             Text("Lütfen geçerli bir yaş giriniz (1-119 arası).")
         }
         .onAppear {
-            Task { await profileVM.loadUserProfile() }
+            Task {
+                await profileVM.loadUserProfile()
+                ageText = "\(profileVM.age)"
+            }
         }
     }
-}
-
-// MARK: - Section Header
-private struct SectionHeaderView: View {
-    let title: String
-    let icon: String
-    
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundColor(.primary.opacity(0.6))
-            Text(title)
-                .font(.headline)
-        }
-    }
-}
-
-// MARK: - Badge Row
-private struct BadgeRowView: View {
-    let badgeId: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: badge?.icon ?? "medal.fill")
-                .foregroundColor(.primary.opacity(0.7))
-            Text(badge?.title ?? badgeId)
-            Spacer()
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.green.opacity(0.7))
-        }
-    }
-    
-    private var badge: Badge? {
-        BadgeDefinitions.getBadge(by: badgeId)
-    }
-}
-
-private extension NumberFormatter {
-    static let intFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .none
-        formatter.allowsFloats = false
-        return formatter
-    }()
 }
 
 #Preview {

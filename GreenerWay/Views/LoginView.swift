@@ -65,8 +65,12 @@ struct LoginView: View {
                                         .autocapitalization(.none)
                                 }
                                 .padding()
-                                .background(Color(.systemGray6))
+                                .background(Color(.secondarySystemGroupedBackground))
                                 .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
 
                                 // Şifre
                                 HStack(spacing: 12) {
@@ -76,8 +80,12 @@ struct LoginView: View {
                                     SecureField("Şifre", text: $password)
                                 }
                                 .padding()
-                                .background(Color(.systemGray6))
+                                .background(Color(.secondarySystemGroupedBackground))
                                 .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
                             }
                             .padding(.horizontal)
 

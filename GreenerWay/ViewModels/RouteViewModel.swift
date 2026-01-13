@@ -104,6 +104,7 @@ final class RouteViewModel: NSObject, ObservableObject {
     private let geocoder = CLGeocoder()
     private let locationManager = CLLocationManager()
     private let db = Firestore.firestore()
+    private let weatherService = OpenWeatherService()
     private lazy var proxy = RouteLocationProxy(owner: self)
 
     fileprivate var bestOriginAccuracy: CLLocationAccuracy = .greatestFiniteMagnitude
@@ -375,17 +376,13 @@ final class RouteViewModel: NSObject, ObservableObject {
     }
 
     private func fetchWeatherIfAvailable(at coordinate: CLLocationCoordinate2D) async {
-        if let svc = _OpenWeatherServiceSingleton.shared {
-            do {
-                let w = try await svc.current(at: coordinate)
+        do {
+            let w = try await weatherService.current(at: coordinate)
+            await MainActor.run {
                 self.weatherInfo = w
-            } catch {
-                print("❌ Weather fetch error: \(error)")
             }
+        } catch {
+            print("❌ Weather fetch error: \(error)")
         }
     }
-}
-
-final class _OpenWeatherServiceSingleton {
-    static var shared: WeatherProviding?
 }

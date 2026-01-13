@@ -38,8 +38,12 @@ struct RegisterView: View {
                             .autocapitalization(.none)
                     }
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color(.secondarySystemGroupedBackground))
                     .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
 
                     // Şifre
                     HStack(spacing: 12) {
@@ -49,8 +53,12 @@ struct RegisterView: View {
                         SecureField("Şifre", text: $password)
                     }
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color(.secondarySystemGroupedBackground))
                     .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
 
                     // Yaş
                     HStack(spacing: 12) {
@@ -61,8 +69,12 @@ struct RegisterView: View {
                             .keyboardType(.numberPad)
                     }
                     .padding()
-                    .background(Color(.systemGray6))
+                    .background(Color(.secondarySystemGroupedBackground))
                     .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
                 }
 
                 // Karbon Hassasiyeti
@@ -75,6 +87,7 @@ struct RegisterView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Slider(value: $carbonSensitivity, in: 0...1)
+                            .tint(.primary)
                         Text("Yüksek")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -84,7 +97,7 @@ struct RegisterView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
                 // Sağlık Durumu
@@ -98,6 +111,9 @@ struct RegisterView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
 
                 // Çocuklu Seyahat
                 Toggle(isOn: $travellingWithChild) {
@@ -108,7 +124,7 @@ struct RegisterView: View {
                     }
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
                 if let errorMessage = errorMessage {

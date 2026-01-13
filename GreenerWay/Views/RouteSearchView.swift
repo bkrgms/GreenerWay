@@ -1,14 +1,13 @@
+
 import SwiftUI
 import MapKit
 
 struct RouteSearchView: View {
     @StateObject private var viewModel = RouteViewModel()
-    @StateObject private var emissionStatsVM = EmissionStatsViewModel()
     @State private var showDetail = false
     @State private var showFullscreenMap = false
     @State private var droppedPin: CLLocationCoordinate2D?
     @EnvironmentObject var authVM: AuthViewModel
-
     private var canCreateRouteFromInputs: Bool {
         let destIsEmpty = viewModel.destinationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let hasOrigin = viewModel.originCoordinate != nil || LocationDelegate.shared.lastLocation != nil || (!viewModel.originText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && viewModel.originText != "Mevcut Konum")
@@ -20,7 +19,6 @@ struct RouteSearchView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 20) {
                     headerSection
-                    statsSection
                     mapSection
                     locationInputSection
                     modeSection
@@ -36,7 +34,6 @@ struct RouteSearchView: View {
             .fullScreenCover(isPresented: $showFullscreenMap) {
                 FullscreenMapSheet(viewModel: viewModel, droppedPin: $droppedPin)
             }
-            .task { await emissionStatsVM.load() }
             .onAppear { LocationDelegate.shared.requestWhenInUse() }
         }
     }
@@ -66,15 +63,6 @@ struct RouteSearchView: View {
             }
         }
         .padding(.top, 10)
-    }
-    
-    // MARK: - Stats
-    private var statsSection: some View {
-        HStack(spacing: 12) {
-            StatCard(icon: "leaf.fill", value: String(format: "%.1f", emissionStatsVM.dayEmissionKg), label: "Bugün", unit: "kg", color: .green)
-            StatCard(icon: "road.lanes", value: String(format: "%.1f", emissionStatsVM.dayDistanceKm), label: "Mesafe", unit: "km", color: .blue)
-            StatCard(icon: "sum", value: String(format: "%.1f", emissionStatsVM.totalEmissionKg), label: "Toplam", unit: "kg", color: .orange)
-        }
     }
     
     // MARK: - Map
@@ -109,24 +97,43 @@ struct RouteSearchView: View {
     private var locationInputSection: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Circle().fill(Color.green).frame(width: 12, height: 12)
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 12, height: 12)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Nereden").font(.caption).foregroundColor(.secondary)
-                    TextField("Mevcut konum", text: $viewModel.originText).font(.body)
+                    Text("Nereden")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("Mevcut konum", text: $viewModel.originText)
+                        .font(.body)
                 }
-            }.padding()
-            Divider().padding(.leading, 40)
+            }
+            .padding()
+            
+            Divider()
+                .padding(.leading, 40)
+            
             HStack(spacing: 14) {
-                Circle().fill(Color.red).frame(width: 12, height: 12)
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 12, height: 12)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Nereye").font(.caption).foregroundColor(.secondary)
-                    TextField("Hedef konum", text: $viewModel.destinationText).font(.body)
+                    Text("Nereye")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextField("Hedef konum", text: $viewModel.destinationText)
+                        .font(.body)
                 }
-            }.padding()
+            }
+            .padding()
         }
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemGroupedBackground))
         .cornerRadius(16)
-        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 2)
     }
     
     // MARK: - Mode Selection
@@ -146,32 +153,32 @@ struct RouteSearchView: View {
         Button {
             Task { await viewModel.buildRoute(); showDetail = true }
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill").font(.title3)
-                Text("Rota Oluştur").font(.headline).fontWeight(.bold)
+            HStack(spacing: 12) {
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.title3)
+                Text("Rota Oluştur")
+                    .font(.headline)
+                    .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(canCreateRouteFromInputs ? Color.black : Color(.systemGray4))
-            .foregroundColor(canCreateRouteFromInputs ? .white : .gray)
-            .cornerRadius(16)
+            .padding(.vertical, 16)
+            .background(canCreateRouteFromInputs ? Color.primary : Color(.systemGray4))
+            .foregroundColor(canCreateRouteFromInputs ? Color(.systemBackground) : .secondary)
+            .cornerRadius(12)
         }
         .disabled(!canCreateRouteFromInputs)
-        .shadow(color: canCreateRouteFromInputs ? .black.opacity(0.2) : .clear, radius: 8, y: 4)
     }
     
     // MARK: - Menu Grid
     private var menuGridSection: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                NavigationLink(destination: EmissionChartView(viewModel: emissionStatsVM)) { MenuButtonContent(icon: "chart.bar.fill", title: "Grafikler", color: .purple) }
+                NavigationLink(destination: EmissionChartView(viewModel: EmissionStatsViewModel())) { MenuButtonContent(icon: "chart.bar.fill", title: "Grafikler", color: .purple) }
                 NavigationLink(destination: JourneyHistoryView()) { MenuButtonContent(icon: "clock.arrow.circlepath", title: "Geçmiş", color: .blue) }
-                NavigationLink(destination: GoalsView()) { MenuButtonContent(icon: "target", title: "Hedefler", color: .green) }
             }
             HStack(spacing: 12) {
+                NavigationLink(destination: GoalsView()) { MenuButtonContent(icon: "target", title: "Hedefler", color: .green) }
                 NavigationLink(destination: BadgesView()) { MenuButtonContent(icon: "trophy.fill", title: "Rozetler", color: .orange) }
-                NavigationLink(destination: NotificationSettingsView()) { MenuButtonContent(icon: "bell.fill", title: "Bildirimler", color: .red) }
-                NavigationLink(destination: ProfileSettings()) { MenuButtonContent(icon: "gearshape.fill", title: "Ayarlar", color: .gray) }
             }
         }
     }
@@ -198,41 +205,6 @@ struct RouteSearchView: View {
     }
 }
 
-// MARK: - Stat Card
-private struct StatCard: View {
-    let icon: String
-    let value: String
-    let label: String
-    let unit: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(color)
-            VStack(spacing: 2) {
-                HStack(spacing: 2) {
-                    Text(value)
-                        .font(.system(size: 20, weight: .bold))
-                    if !unit.isEmpty {
-                        Text(unit)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(color.opacity(0.1))
-        .cornerRadius(14)
-    }
-}
-
 // MARK: - Mode Card
 private struct ModeCard: View {
     let icon: String
@@ -244,30 +216,37 @@ private struct ModeCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? color : Color(.systemGray5))
-                        .frame(width: 48, height: 48)
+                        .frame(width: 52, height: 52)
+                        .shadow(color: isSelected ? color.opacity(0.4) : .clear, radius: 8, y: 4)
                     Image(systemName: icon)
-                        .font(.system(size: 20))
-                        .foregroundColor(isSelected ? .white : .primary)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(isSelected ? .white : .secondary)
                 }
+                
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                
                 Text(emission)
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(isSelected ? color.opacity(0.15) : Color(.systemBackground))
-            .cornerRadius(14)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? color : Color(.systemGray4), lineWidth: isSelected ? 2 : 1)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? color.opacity(0.12) : Color(.secondarySystemGroupedBackground))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? color : Color.primary.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+            )
+            .shadow(color: isSelected ? color.opacity(0.2) : .clear, radius: 6, y: 3)
         }
         .buttonStyle(.plain)
     }
@@ -280,25 +259,28 @@ private struct MenuButtonContent: View {
     let color: Color
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             ZStack {
                 Circle()
                     .fill(color.opacity(0.15))
-                    .frame(width: 44, height: 44)
+                    .frame(width: 48, height: 48)
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(color)
             }
             Text(title)
                 .font(.caption)
-                .fontWeight(.medium)
+                .fontWeight(.semibold)
                 .foregroundColor(.primary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color(.systemBackground))
-        .cornerRadius(14)
-        .shadow(color: .black.opacity(0.03), radius: 3, y: 2)
+        .padding(.vertical, 16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
     }
 }
 
@@ -324,3 +306,4 @@ struct TransportModeChip: View {
         .buttonStyle(.plain)
     }
 }
+

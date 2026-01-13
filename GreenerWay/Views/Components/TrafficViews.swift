@@ -15,7 +15,7 @@ struct TrafficBadgeView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.systemGray6))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(8)
         } else if let traffic = traffic {
             HStack(spacing: 8) {

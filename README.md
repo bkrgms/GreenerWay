@@ -1,75 +1,79 @@
-# GreenerWay 🌱
+# GreenerWay 🌿
 
-Karbon emisyonunu takip et, çevreye katkı sağla!
+GreenerWay is an AI-powered iOS application that estimates users' carbon footprint by analyzing daily activity and location-related signals, and provides personalized, data-driven sustainability recommendations.
 
-## 🎯 Özellikler
+## 📱 Screenshots
 
-### ✅ Mevcut Özellikler
-- **🗺️ Rota Planlama**: Apple Maps entegrasyonu ile detaylı rota oluşturma
-- **🚗 Ulaşım Modları**: Yürüyüş, Araba, Toplu Taşıma karşılaştırması
-- **📊 Emisyon Grafiği**: Günlük, haftalık, aylık karbon emisyon takibi
-- **🔥 Firebase Entegrasyonu**: Yolculuk verilerinin bulutta saklanması
-- **🌦️ Hava Durumu**: OpenWeather API ile gerçek zamanlı hava durumu
-- **🤖 AI Öneri Motoru**: Kural tabanlı akıllı ulaşım önerileri
-- **👤 Profil Yönetimi**: Kişiselleştirilmiş kullanıcı ayarları
-- **🔐 Firebase Auth**: Güvenli giriş/kayıt sistemi
+<table style="width:100%">
+  <tr>
+    <td align="center"><b>Login & Onboarding</b></td>
+    <td align="center"><b>Route Search</b></td>
+    <td align="center"><b>Route Options</b></td>
+  </tr>
+  <tr>
+    <td><img src="./Assets/login-page.jpg" width="250"></td>
+    <td><img src="./Assets/route-search-page.jpg" width="250"></td>
+    <td><img src="./Assets/route-search-page2.jpg" width="250"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Route Details</b></td>
+    <td align="center"><b>Details & Map</b></td>
+    <td align="center"><b>Emission Analysis</b></td>
+  </tr>
+  <tr>
+    <td><img src="./Assets/route-detail-page.jpg" width="250"></td>
+    <td><img src="./Assets/route-detail-page2.jpg" width="250"></td>
+    <td><img src="./Assets/emission-chart-page.jpg" width="250"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Travel History</b></td>
+    <td align="center"><b>Gamification & Badges</b></td>
+    <td align="center"></td> 
+  </tr>
+  <tr>
+    <td><img src="./Assets/travel-histroy-page.jpg" width="250"></td>
+    <td><img src="./Assets/badged-points-page.jpg" width="250"></td>
+    <td></td>
+  </tr>
+</table>
 
-### 📈 Emisyon Dashboard Özellikleri
-- Günlük, haftalık ve aylık emisyon grafikleri
-- Mod bazlı karşılaştırma (Yürüyüş, Araba, Toplu Taşıma)
-- Otomatik Firestore senkronizasyonu
-- AI destekli içgörüler ve öneriler
-- Kullanıcı profili bazlı kişiselleştirilmiş öneriler
+## 📖 Overview
+Many people are unaware of the environmental impact of their everyday habits. GreenerWay makes this impact measurable and understandable, then guides users toward more sustainable choices with actionable recommendations.
 
-## 🛠️ Teknolojiler
-- **Swift / SwiftUI**: Modern iOS geliştirme
-- **MapKit**: Harita ve rota planlama
-- **Firebase**:
-  - Authentication (Kullanıcı girişi)
-  - Firestore (Veri saklama)
-- **Charts**: Görselleştirme (iOS 16+)
-- **OpenWeather API**: Hava durumu
+## ✨ Key Features
+- **AI/ML-assisted carbon footprint estimation**
+- **Personalized sustainability recommendations**
+- **Route search and route detail flows**
+- **Emissions and insights screens**
+- **Travel history tracking view**
 
-## 📱 Kurulum
+## 🛠 Tech Stack
+- **SwiftUI**
+- **MVVM Architecture**
+- **AI / Machine Learning**
+- **CoreLocation**
+- **Firebase** (Authentication / Firestore — if enabled)
 
-1. Projeyi klonlayın
-2. `GoogleService-Info.plist` dosyasını Firebase Console'dan indirin
-3. Xcode ile `GreenerWay.xcodeproj` açın
-4. Firebase'i yapılandırın
-5. Uygulamayı çalıştırın
+## 🚀 Getting Started
 
-## 🚀 Kullanım
+### Requirements
+- Xcode (latest stable recommended)
+- iOS Simulator or a physical iPhone
 
-1. **Giriş Yap / Kayıt Ol**: Firebase Auth ile hesap oluştur
-2. **Rota Oluştur**: Başlangıç ve varış noktası seç
-3. **Ulaşım Modu Seç**: Yürüyüş, Araba veya Toplu Taşıma
-4. **Emisyonu Gör**: CO₂ emisyonunu anlık takip et
-5. **AI Önerisi Al**: En çevreci seçeneği öğren
-6. **Grafiği İncele**: Geçmiş verilerini analiz et
+### Run Locally
 
-## 📊 Dashboard Kullanımı
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/bkrgms/GreenerWay.git](https://github.com/bkrgms/GreenerWay.git)
+   cd GreenerWay
+2. Open the project in Xcode:
 
-Ana ekrandaki **Dashboard** (grafik) ikonuna tıklayarak:
-- Günlük, haftalık, aylık emisyon trendlerini görüntüle
-- Mod seçerek (Yürüyüş/Araba/Toplu Taşıma) karşılaştırma yap
-- AI önerileriyle tasarruf potansiyelini keşfet
-- Veriler otomatik olarak Firebase Firestore'da saklanır
+Open GreenerWay.xcodeproj
 
-## 🎓 Bitirme Projesi İçin
+3. (Optional) Firebase setup:
 
-Bu proje, **karbon emisyon takibi ve sürdürülebilir ulaşım** konularında bir bitirme projesi olarak geliştirilmektedir.
+Add GoogleService-Info.plist if the project uses Firebase.
 
-### Proje Hedefleri:
-- Bireysel karbon ayak izini azaltma bilincini artırmak
-- Çevreci ulaşım seçeneklerini teşvik etmek
-- Veri odaklı karar vermeyi desteklemek
-- Mobil platform üzerinde sürdürülebilirlik çözümleri sunmak
+Ensure the Bundle Identifier matches your Firebase configuration.
 
-## 📝 Lisans
-
-Bu proje eğitim amaçlıdır.
-
----
-
-**Geliştirici**: Bekir Gümüş
-**Tarih**: Aralık 2024
+4. Run the app on an iOS Simulator or a physical device.

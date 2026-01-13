@@ -1,4 +1,4 @@
-gitimport SwiftUI
+import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -16,8 +16,12 @@ struct GoalsView: View {
                         .font(.body.weight(.medium))
                         .foregroundColor(.primary)
                         .frame(width: 40, height: 40)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemGroupedBackground))
                         .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
                 }
                 
                 Spacer()
@@ -32,8 +36,12 @@ struct GoalsView: View {
                         .font(.body.weight(.medium))
                         .foregroundColor(.primary)
                         .frame(width: 40, height: 40)
-                        .background(Color(.systemGray6))
+                        .background(Color(.secondarySystemGroupedBackground))
                         .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
                 }
             }
             .padding()
