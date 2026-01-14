@@ -28,11 +28,12 @@ GreenerWay is an AI-powered iOS application that estimates users' carbon footpri
   <tr>
     <td align="center"><b>Travel History</b></td>
     <td align="center"><b>Gamification & Badges</b></td>
-    <td align="center"></td> 
+    <td align="center"><b>Goals Screen</b></td>
   </tr>
   <tr>
     <td><img src="./Assets/travel-histroy-page.jpg" width="250"></td>
     <td><img src="./Assets/badged-points-page.jpg" width="250"></td>
+    <td><img src="./Assets/goals-page.jpg" width="250"></td>
     <td></td>
   </tr>
 </table>
