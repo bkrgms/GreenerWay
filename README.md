@@ -1,6 +1,7 @@
 # GreenerWay 🌿
 
-GreenerWay is an AI-powered iOS application that estimates users' carbon footprint by analyzing daily activity and location-related signals, and provides personalized, data-driven sustainability recommendations.
+GreenerWay is an AI-powered iOS application designed to help individuals understand, track, and reduce their carbon footprint through intelligent analysis of daily habits and location-aware activity signals. By combining environmental impact estimation with machine learning–assisted insights, the app transforms everyday actions into measurable sustainability metrics. GreenerWay then delivers personalized, data-driven recommendations that encourage users to make smarter, greener choices and build long-term eco-friendly routines.
+
 
 ## 📱 Screenshots
 
